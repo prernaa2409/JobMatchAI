@@ -21,14 +21,28 @@ export default function Auth({ mode }: AuthProps) {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    // TODO: Implement actual auth logic
-    console.log("Auth submitted:", { mode, email, password, username });
+    
+    // Mock auth - TODO: Implement actual NextAuth + Firebase integration
+    const user = {
+      id: `user-${Date.now()}`,
+      email,
+      username: mode === "signup" ? username : email.split("@")[0],
+    };
+    
+    localStorage.setItem("mockUser", JSON.stringify(user));
     setLocation("/dashboard");
   };
 
   const handleOAuth = (provider: string) => {
-    // TODO: Implement actual OAuth redirect
-    console.log(`OAuth with ${provider}`);
+    // Mock OAuth - TODO: Implement actual OAuth with NextAuth + Firebase
+    const mockUser = {
+      id: `${provider}-user-${Date.now()}`,
+      email: `user@${provider}.com`,
+      username: `${provider}_user`,
+    };
+    
+    localStorage.setItem("mockUser", JSON.stringify(mockUser));
+    setLocation("/dashboard");
   };
 
   return (

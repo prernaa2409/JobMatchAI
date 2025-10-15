@@ -16,11 +16,25 @@ export default function Analyze() {
 
     setIsAnalyzing(true);
     
-    // TODO: Replace with actual API call to /api/analyze
-    setTimeout(() => {
-      const mockAnalysisId = Math.random().toString(36).substring(7);
-      setLocation(`/analysis/${mockAnalysisId}`);
-    }, 2000);
+    try {
+      const response = await fetch("/api/analyze", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ resumeText }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Analysis failed");
+      }
+
+      const data = await response.json();
+      setLocation(`/analysis/${data.id}`);
+    } catch (error) {
+      console.error("Analysis error:", error);
+      alert("Failed to analyze resume. Please try again.");
+    } finally {
+      setIsAnalyzing(false);
+    }
   };
 
   return (

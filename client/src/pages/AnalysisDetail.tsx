@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRoute, Link } from "wouter";
+import { useQuery } from "@tanstack/react-query";
 import Header from "@/components/Header";
 import ScoreCircle from "@/components/ScoreCircle";
 import ProgressBar from "@/components/ProgressBar";
@@ -19,46 +20,34 @@ export default function AnalysisDetail() {
   const [, params] = useRoute("/analysis/:id");
   const analysisId = params?.id;
 
-  // TODO: Remove mock data - fetch from API using analysisId
-  const [analysis] = useState({
-    id: analysisId,
-    date: "2 hours ago",
-    overallScore: 85,
-    contentScore: 88,
-    keywordScore: 78,
-    formatScore: 90,
-    experienceScore: 84,
-    keywords: {
-      present: ["React", "TypeScript", "Node.js", "AWS", "Agile", "CI/CD"],
-      missing: ["Docker", "Kubernetes", "GraphQL", "Redis", "Microservices"],
-    },
-    suggestions: [
-      {
-        category: "Content Quality",
-        items: [
-          "Use more action verbs to describe your achievements (e.g., 'Led', 'Implemented', 'Architected')",
-          "Quantify your impact with specific metrics and numbers",
-          "Highlight leadership and team collaboration experiences",
-        ],
-      },
-      {
-        category: "Keyword Optimization",
-        items: [
-          "Add 'Docker' and 'Kubernetes' to match common requirements for senior roles",
-          "Include 'Microservices' architecture experience if applicable",
-          "Mention GraphQL if you have experience with it",
-        ],
-      },
-      {
-        category: "Format & Structure",
-        items: [
-          "Ensure consistent date formatting throughout",
-          "Use bullet points for better readability",
-          "Keep section headings clear and professional",
-        ],
-      },
-    ],
+  const { data: analysis, isLoading } = useQuery<any>({
+    queryKey: ["/api/analysis", analysisId],
+    enabled: !!analysisId,
   });
+
+  const formatDate = (date: string | Date) => {
+    const d = new Date(date);
+    const now = new Date();
+    const diffMs = now.getTime() - d.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMins / 60);
+    const diffDays = Math.floor(diffHours / 24);
+
+    if (diffMins < 60) return `${diffMins} minutes ago`;
+    if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;
+    return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
+  };
+
+  if (isLoading || !analysis) {
+    return (
+      <div className="min-h-screen">
+        <Header isAuthenticated={true} />
+        <div className="container mx-auto px-6 py-16 text-center">
+          <p className="text-muted-foreground">Loading analysis...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen">
@@ -77,7 +66,7 @@ export default function AnalysisDetail() {
         <div className="mb-8">
           <div className="mb-4 flex items-center gap-2 text-sm text-muted-foreground">
             <Calendar className="h-4 w-4" />
-            <span>{analysis.date}</span>
+            <span>{formatDate(analysis.createdAt)}</span>
           </div>
           <h1 className="mb-2 font-display text-3xl font-bold">Resume Analysis</h1>
           <p className="text-muted-foreground">Detailed ATS scoring and improvement suggestions</p>
@@ -123,7 +112,7 @@ export default function AnalysisDetail() {
                 <div>
                   <h3 className="mb-3 text-sm font-medium text-muted-foreground">Present Keywords</h3>
                   <div className="flex flex-wrap gap-2">
-                    {analysis.keywords.present.map((keyword) => (
+                    {((analysis.keywords as any)?.present || []).map((keyword: string) => (
                       <KeywordBadge key={keyword} keyword={keyword} present={true} />
                     ))}
                   </div>
@@ -131,7 +120,7 @@ export default function AnalysisDetail() {
                 <div>
                   <h3 className="mb-3 text-sm font-medium text-muted-foreground">Missing Keywords</h3>
                   <div className="flex flex-wrap gap-2">
-                    {analysis.keywords.missing.map((keyword) => (
+                    {((analysis.keywords as any)?.missing || []).map((keyword: string) => (
                       <KeywordBadge key={keyword} keyword={keyword} present={false} />
                     ))}
                   </div>
@@ -150,14 +139,14 @@ export default function AnalysisDetail() {
               </CardHeader>
               <CardContent>
                 <Accordion type="single" collapsible className="w-full">
-                  {analysis.suggestions.map((section, idx) => (
+                  {(analysis.suggestions as any[] || []).map((section: any, idx: number) => (
                     <AccordionItem key={idx} value={`item-${idx}`}>
                       <AccordionTrigger data-testid={`accordion-${section.category.toLowerCase().replace(/\s+/g, '-')}`}>
                         {section.category}
                       </AccordionTrigger>
                       <AccordionContent>
                         <ul className="space-y-2">
-                          {section.items.map((item, itemIdx) => (
+                          {section.items.map((item: string, itemIdx: number) => (
                             <li key={itemIdx} className="flex gap-3 text-sm text-muted-foreground">
                               <span className="text-primary">•</span>
                               <span>{item}</span>

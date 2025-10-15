@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 import Header from "@/components/Header";
 import StatsCard from "@/components/StatsCard";
 import AnalysisCard from "@/components/AnalysisCard";
@@ -8,22 +9,41 @@ import { FileText, Zap, TrendingUp, Plus } from "lucide-react";
 import { Link } from "wouter";
 
 export default function Dashboard() {
-  // TODO: Remove mock data - fetch from API
-  const [stats] = useState({
-    totalAnalyses: 24,
-    improvementsUsed: 1,
-    improvementsTotal: 3,
-    averageScore: 78,
+  const { data: analyses = [] } = useQuery<any[]>({
+    queryKey: ["/api/analyses"],
   });
 
-  const [analyses] = useState([
-    { id: "1", date: "2 hours ago", score: 92, title: "Senior Developer Resume" },
-    { id: "2", date: "1 day ago", score: 76, title: "Product Manager Resume" },
-    { id: "3", date: "3 days ago", score: 58, title: "UX Designer Resume" },
-    { id: "4", date: "1 week ago", score: 85, title: "Data Analyst Resume" },
-    { id: "5", date: "2 weeks ago", score: 71, title: "Marketing Manager Resume" },
-    { id: "6", date: "3 weeks ago", score: 88, title: "Full Stack Developer Resume" },
-  ]);
+  const { data: quota } = useQuery<any>({
+    queryKey: ["/api/quota"],
+  });
+
+  const formatDate = (date: string | Date) => {
+    const d = new Date(date);
+    const now = new Date();
+    const diffMs = now.getTime() - d.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMins / 60);
+    const diffDays = Math.floor(diffHours / 24);
+
+    if (diffMins < 60) return `${diffMins} min ago`;
+    if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;
+    if (diffDays < 7) return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
+    if (diffDays < 30) return `${Math.floor(diffDays / 7)} week${Math.floor(diffDays / 7) > 1 ? 's' : ''} ago`;
+    return `${Math.floor(diffDays / 30)} month${Math.floor(diffDays / 30) > 1 ? 's' : ''} ago`;
+  };
+
+  const stats = useMemo(() => {
+    const avgScore = analyses.length > 0
+      ? Math.round(analyses.reduce((sum: number, a: any) => sum + a.overallScore, 0) / analyses.length)
+      : 0;
+
+    return {
+      totalAnalyses: analyses.length,
+      improvementsUsed: quota?.used || 0,
+      improvementsTotal: quota?.total || 3,
+      averageScore: avgScore,
+    };
+  }, [analyses, quota]);
 
   return (
     <div className="min-h-screen">
@@ -76,11 +96,30 @@ export default function Dashboard() {
           <p className="text-sm text-muted-foreground">View and manage your resume analyses</p>
         </div>
 
-        <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
-          {analyses.map((analysis) => (
-            <AnalysisCard key={analysis.id} {...analysis} />
-          ))}
-        </div>
+        {analyses.length === 0 ? (
+          <div className="rounded-lg border border-dashed border-border bg-muted/30 p-12 text-center">
+            <FileText className="mx-auto mb-4 h-12 w-12 text-muted-foreground" />
+            <p className="mb-2 text-lg font-medium">No analyses yet</p>
+            <p className="text-sm text-muted-foreground mb-4">
+              Upload your first resume to get started
+            </p>
+            <Link href="/analyze">
+              <Button>Analyze Resume</Button>
+            </Link>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
+            {analyses.map((analysis: any) => (
+              <AnalysisCard 
+                key={analysis.id} 
+                id={analysis.id}
+                date={formatDate(analysis.createdAt)}
+                score={analysis.overallScore}
+                title="Resume Analysis"
+              />
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

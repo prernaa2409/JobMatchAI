@@ -38,7 +38,15 @@ export default function Header({ isAuthenticated = false, showAuthButtons = true
               <Button variant="ghost" size="icon" data-testid="button-profile">
                 <User className="h-5 w-5" />
               </Button>
-              <Button variant="ghost" size="icon" data-testid="button-logout">
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                data-testid="button-logout"
+                onClick={() => {
+                  localStorage.removeItem("mockUser");
+                  window.location.href = "/";
+                }}
+              >
                 <LogOut className="h-5 w-5" />
               </Button>
             </>

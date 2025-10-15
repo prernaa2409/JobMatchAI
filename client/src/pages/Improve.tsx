@@ -1,5 +1,7 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { queryClient, apiRequest } from "@/lib/queryClient";
 import Header from "@/components/Header";
 import QuotaIndicator from "@/components/QuotaIndicator";
 import { Button } from "@/components/ui/button";
@@ -13,35 +15,75 @@ export default function Improve() {
   const params = new URLSearchParams(location.split("?")[1]);
   const analysisId = params.get("id");
 
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [hasGenerated, setHasGenerated] = useState(false);
+  const { data: quota } = useQuery<any>({
+    queryKey: ["/api/quota"],
+  });
 
-  // TODO: Remove mock data
-  const [quota] = useState({ used: 1, total: 3 });
-  const [originalText] = useState(
-    "Senior Software Engineer with 5 years of experience. Worked on multiple projects using React and Node.js. Managed teams and delivered features."
-  );
-  const [improvedText] = useState(
-    "Results-driven Senior Software Engineer with 5+ years of expertise in architecting scalable web applications using React, TypeScript, and Node.js. Led cross-functional teams of 8+ engineers to deliver mission-critical features, improving application performance by 40% and reducing deployment time by 60% through implementation of CI/CD pipelines and containerization with Docker and Kubernetes."
-  );
+  const { data: analysis } = useQuery<any>({
+    queryKey: ["/api/analysis", analysisId],
+    enabled: !!analysisId,
+  });
 
-  const handleGenerate = async () => {
-    if (quota.used >= quota.total) return;
+  const [improvedText, setImprovedText] = useState("");
 
-    setIsGenerating(true);
-    // TODO: Call actual API /api/improve
-    setTimeout(() => {
-      setIsGenerating(false);
-      setHasGenerated(true);
-    }, 3000);
+  const improveMutation = useMutation({
+    mutationFn: async () => {
+      const response = await fetch("/api/improve", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ analysisId }),
+      });
+      
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Failed to improve resume");
+      }
+      
+      return response.json();
+    },
+    onSuccess: (data: any) => {
+      setImprovedText(data.improvedText);
+      queryClient.invalidateQueries({ queryKey: ["/api/quota"] });
+    },
+    onError: (error: any) => {
+      alert(error.message || "Failed to improve resume. Please try again.");
+    },
+  });
+
+  const handleGenerate = () => {
+    if (!quota || quota.used >= quota.total) return;
+    improveMutation.mutate();
   };
 
-  const handleDownload = () => {
-    // TODO: Implement actual PDF generation with jsPDF or html2pdf
-    console.log("Downloading improved resume as PDF");
+  const handleDownload = async () => {
+    if (!improvedText) return;
+
+    try {
+      const { jsPDF } = await import("jspdf");
+      const doc = new jsPDF();
+      
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const margin = 20;
+      const maxWidth = pageWidth - (margin * 2);
+      
+      // Split text into lines to fit page width
+      const lines = doc.splitTextToSize(improvedText, maxWidth);
+      
+      // Add text to PDF
+      doc.setFontSize(12);
+      doc.text(lines, margin, margin);
+      
+      // Download PDF
+      doc.save(`improved-resume-${Date.now()}.pdf`);
+    } catch (error) {
+      console.error("PDF generation error:", error);
+      alert("Failed to generate PDF. Please try again.");
+    }
   };
 
-  const canGenerate = quota.used < quota.total && !hasGenerated;
+  const canGenerate = quota && quota.used < quota.total && !improvedText;
+  const originalText = analysis?.resumeText || "";
+  const isGenerating = improveMutation.isPending;
 
   return (
     <div className="min-h-screen">
@@ -96,7 +138,7 @@ export default function Improve() {
                 </div>
               </CardHeader>
               <CardContent>
-                {!hasGenerated ? (
+                {!improvedText ? (
                   <div className="rounded-lg border border-dashed border-border bg-muted/30 p-12 text-center">
                     <Sparkles className="mx-auto mb-4 h-12 w-12 text-muted-foreground" />
                     <p className="mb-2 text-lg font-medium">No Improvement Generated Yet</p>
@@ -147,9 +189,9 @@ export default function Improve() {
           </div>
 
           <div className="space-y-6">
-            <QuotaIndicator used={quota.used} total={quota.total} />
+            <QuotaIndicator used={quota?.used || 0} total={quota?.total || 3} />
 
-            {hasGenerated && (
+            {improvedText && (
               <Card>
                 <CardHeader>
                   <h3 className="text-lg font-semibold">Download Resume</h3>
