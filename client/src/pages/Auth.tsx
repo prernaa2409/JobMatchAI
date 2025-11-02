@@ -1,13 +1,16 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
+import { useAuth } from "@/hooks/use-auth";
 import Header from "@/components/Header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardHeader, CardContent, CardFooter } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
+import { Loader2 } from "lucide-react";
 import { FaGoogle, FaGithub } from "react-icons/fa";
 import { Link } from "wouter";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 interface AuthProps {
   mode: "login" | "signup";
@@ -15,39 +18,47 @@ interface AuthProps {
 
 export default function Auth({ mode }: AuthProps) {
   const [, setLocation] = useLocation();
+  const { login, signup } = useAuth();
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [username, setUsername] = useState("");
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    // Mock auth - TODO: Implement actual NextAuth + Firebase integration
-    const user = {
-      id: `user-${Date.now()}`,
-      email,
-      username: mode === "signup" ? username : email.split("@")[0],
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      if (mode === "signup") {
+        if (!username) {
+          throw new Error("Username is required");
+        }
+        await signup(email, password, username);
+      } else {
+        await login(email, password);
+      }
+      setLocation("/dashboard");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Authentication failed");
+    } finally {
+      setIsLoading(false);
     };
     
-    localStorage.setItem("mockUser", JSON.stringify(user));
-    setLocation("/dashboard");
   };
 
-  const handleOAuth = (provider: string) => {
-    // Mock OAuth - TODO: Implement actual OAuth with NextAuth + Firebase
-    const mockUser = {
-      id: `${provider}-user-${Date.now()}`,
-      email: `user@${provider}.com`,
-      username: `${provider}_user`,
-    };
-    
-    localStorage.setItem("mockUser", JSON.stringify(mockUser));
-    setLocation("/dashboard");
+  const handleOAuth = async (provider: string) => {
+    try {
+      window.location.href = `/api/auth/${provider}`;
+    } catch (err) {
+      setError("OAuth login is not available yet");
+    }
   };
 
   return (
     <div className="min-h-screen">
-      <Header isAuthenticated={false} showAuthButtons={false} />
+      <Header />
 
       <div className="container mx-auto px-6 py-16">
         <div className="mx-auto max-w-md">
@@ -92,6 +103,12 @@ export default function Auth({ mode }: AuthProps) {
                 </span>
               </div>
 
+              {error && (
+                <Alert variant="destructive">
+                  <AlertDescription>{error}</AlertDescription>
+                </Alert>
+              )}
+
               <form onSubmit={handleSubmit} className="space-y-4">
                 {mode === "signup" && (
                   <div className="space-y-2">
@@ -103,6 +120,7 @@ export default function Auth({ mode }: AuthProps) {
                       onChange={(e) => setUsername(e.target.value)}
                       required
                       data-testid="input-username"
+                      disabled={isLoading}
                     />
                   </div>
                 )}
@@ -117,6 +135,7 @@ export default function Auth({ mode }: AuthProps) {
                     onChange={(e) => setEmail(e.target.value)}
                     required
                     data-testid="input-email"
+                    disabled={isLoading}
                   />
                 </div>
 
@@ -130,11 +149,19 @@ export default function Auth({ mode }: AuthProps) {
                     onChange={(e) => setPassword(e.target.value)}
                     required
                     data-testid="input-password"
+                    disabled={isLoading}
                   />
                 </div>
 
-                <Button type="submit" className="w-full" data-testid="button-submit-auth">
-                  {mode === "login" ? "Sign In" : "Create Account"}
+                <Button type="submit" className="w-full" data-testid="button-submit-auth" disabled={isLoading}>
+                  {isLoading ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      {mode === "login" ? "Signing in..." : "Creating account..."}
+                    </>
+                  ) : (
+                    mode === "login" ? "Sign In" : "Create Account"
+                  )}
                 </Button>
               </form>
             </CardContent>

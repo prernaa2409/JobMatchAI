@@ -1,6 +1,7 @@
 # JobMatchAI Design Guidelines
 
 ## Design Approach
+
 **System Foundation: Material Design principles** adapted for a professional career tools platform. Drawing inspiration from **Linear** (clean data presentation) and **Notion** (content-rich layouts) to create a trustworthy, modern interface for job seekers.
 
 **Core Principle:** Balance professional credibility with approachability - users are making career decisions and need clear, confident visual communication.

@@ -1,10 +1,27 @@
+import dotenv from "dotenv";
+dotenv.config();
+
 import express, { type Request, Response, NextFunction } from "express";
-import { registerRoutes } from "./routes";
+import cookieParser from "cookie-parser";
 import { setupVite, serveStatic, log } from "./vite";
 
 const app = express();
+
+// Configure CORS
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', process.env.NODE_ENV === 'production' ? 'https://jobmatchai.com' : 'http://localhost:5173');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+  res.header('Access-Control-Allow-Credentials', 'true');
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(200);
+  }
+  next();
+});
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
+app.use(cookieParser());
 
 app.use((req, res, next) => {
   const start = Date.now();
@@ -37,6 +54,8 @@ app.use((req, res, next) => {
 });
 
 (async () => {
+  // dynamically import routes after dotenv.config() has run so env vars are available
+  const { registerRoutes } = await import("./routes");
   const server = await registerRoutes(app);
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {

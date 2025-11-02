@@ -4,6 +4,16 @@
 
 /* DARK MODE BY DEFAULT - JobMatchAI Theme */
 :root {
+  /* Design tokens (named) from design_guidelines.md */
+  --color-bg-deep: #222831;
+  --color-bg-elevated: #393E46;
+  --color-accent: #00ADB5;
+  --color-text-primary: #EEEEEE;
+  --color-text-secondary: rgba(238,238,238,0.7);
+  --color-success: hsl(142 71% 45%);
+  --color-warning: hsl(38 92% 50%);
+  --color-error: hsl(0 72% 51%);
+
   --button-outline: rgba(255,255,255, .10);
   --badge-outline: rgba(255,255,255, .05);
 
@@ -280,9 +290,7 @@
   /* .no-default-hover-elevate/no-default-active-elevate is an escape hatch so consumers of
    * buttons/badges can remove the automatic brightness adjustment on interactions
    * and program their own. */
-  .no-default-hover-elevate {}
-
-  .no-default-active-elevate {}
+  /* Removed empty rulesets */
 
 
   /**

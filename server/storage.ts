@@ -1,5 +1,7 @@
 import { type User, type InsertUser, type Analysis, type Revision } from "@shared/schema";
-import { randomUUID } from "crypto";
+import { db } from "./db";
+import { users, analyses, revisions } from "@shared/schema";
+import { and, eq } from "drizzle-orm";
 
 export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
@@ -18,114 +20,83 @@ export interface IStorage {
   getRevisionByAnalysis(analysisId: string): Promise<Revision | undefined>;
 }
 
-export class MemStorage implements IStorage {
-  private users: Map<string, User>;
-  private analyses: Map<string, Analysis>;
-  private revisions: Map<string, Revision>;
-
-  constructor() {
-    this.users = new Map();
-    this.analyses = new Map();
-    this.revisions = new Map();
-  }
-
+export class PostgresStorage implements IStorage {
   async getUser(id: string): Promise<User | undefined> {
-    return this.users.get(id);
+    const result = await db.select().from(users).where(eq(users.id, id));
+    return result[0];
   }
 
   async getUserByUsername(username: string): Promise<User | undefined> {
-    return Array.from(this.users.values()).find(
-      (user) => user.username === username,
-    );
+    const result = await db.select().from(users).where(eq(users.username, username));
+    return result[0];
   }
 
   async getUserByEmail(email: string): Promise<User | undefined> {
-    return Array.from(this.users.values()).find(
-      (user) => user.email === email,
-    );
+    const result = await db.select().from(users).where(eq(users.email, email));
+    return result[0];
   }
 
-  async createUser(insertUser: InsertUser): Promise<User> {
-    const id = randomUUID();
-    const user: User = { 
-      ...insertUser, 
-      id,
-      provider: "email",
-      improvementsUsed: 0,
-      improvementsLimit: 3,
-      createdAt: new Date(),
-    };
-    this.users.set(id, user);
-    return user;
+  async createUser(user: InsertUser): Promise<User> {
+    const [result] = await db.insert(users).values(user).returning();
+    return result;
   }
 
   async getOrCreateMockUser(userId: string): Promise<User> {
-    let user = this.users.get(userId);
+    let user = await this.getUser(userId);
     if (!user) {
-      user = {
-        id: userId,
+      user = await this.createUser({
         username: "demo_user",
         email: "demo@jobmatchai.com",
         password: "mock",
-        provider: "mock",
-        improvementsUsed: 0,
-        improvementsLimit: 3,
-        createdAt: new Date(),
-      };
-      this.users.set(userId, user);
+      });
     }
     return user;
   }
 
   async updateUserImprovements(userId: string, used: number): Promise<void> {
-    const user = this.users.get(userId);
-    if (user) {
-      user.improvementsUsed = used;
-      this.users.set(userId, user);
-    }
+    await db.update(users)
+      .set({ improvementsUsed: used })
+      .where(eq(users.id, userId));
   }
 
   async createAnalysis(analysis: Omit<Analysis, "id" | "createdAt">): Promise<Analysis> {
-    const id = randomUUID();
-    const newAnalysis: Analysis = {
-      ...analysis,
-      id,
-      createdAt: new Date(),
-    };
-    this.analyses.set(id, newAnalysis);
-    return newAnalysis;
+    const [result] = await db.insert(analyses)
+      .values(analysis)
+      .returning();
+    return result;
   }
 
   async getAnalysis(id: string): Promise<Analysis | undefined> {
-    return this.analyses.get(id);
+    const result = await db.select().from(analyses).where(eq(analyses.id, id));
+    return result[0];
   }
 
   async getUserAnalyses(userId: string): Promise<Analysis[]> {
-    return Array.from(this.analyses.values())
-      .filter((analysis) => analysis.userId === userId)
-      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+    return db.select()
+      .from(analyses)
+      .where(eq(analyses.userId, userId))
+      .orderBy(analyses.createdAt);
   }
 
   async createRevision(revision: Omit<Revision, "id" | "createdAt">): Promise<Revision> {
-    const id = randomUUID();
-    const newRevision: Revision = {
-      ...revision,
-      id,
-      createdAt: new Date(),
-    };
-    this.revisions.set(id, newRevision);
-    return newRevision;
+    const [result] = await db.insert(revisions)
+      .values(revision)
+      .returning();
+    return result;
   }
 
   async getRevision(id: string): Promise<Revision | undefined> {
-    return this.revisions.get(id);
+    const result = await db.select().from(revisions).where(eq(revisions.id, id));
+    return result[0];
   }
 
   async getRevisionByAnalysis(analysisId: string): Promise<Revision | undefined> {
-    return Array.from(this.revisions.values()).find(
-      (revision) => revision.analysisId === analysisId
-    );
+    const result = await db.select()
+      .from(revisions)
+      .where(eq(revisions.analysisId, analysisId))
+      .limit(1);
+    return result[0];
   }
 }
 
-export const storage = new MemStorage();
+export const storage = new PostgresStorage();

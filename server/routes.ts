@@ -1,15 +1,123 @@
-import type { Express } from "express";
+import type { Express, Request } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { analyzeResume, improveResume } from "./gemini";
 import { insertAnalysisSchema, insertRevisionSchema } from "@shared/schema";
+import bcrypt from "bcryptjs";
+import jwt from "jsonwebtoken";
+import { z } from "zod";
+
+const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key";
+
+const loginSchema = z.object({
+  email: z.string().email(),
+  password: z.string().min(8),
+});
+
+const signupSchema = loginSchema.extend({
+  username: z.string().min(3),
+});
+
+interface AuthRequest extends Request {
+  userId?: string;
+}
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  // Mock session middleware - TODO: Replace with actual NextAuth session
-  app.use((req, res, next) => {
-    // Mock authenticated user for MVP
-    (req as any).userId = "mock-user-id";
-    next();
+  // Authentication middleware
+  app.use((req: AuthRequest, res, next) => {
+    const token = req.cookies.token;
+    if (!token) return next();
+
+    try {
+      const decoded = jwt.verify(token, JWT_SECRET) as { userId: string };
+      req.userId = decoded.userId;
+      next();
+    } catch (error) {
+      res.clearCookie("token");
+      next();
+    }
+  });
+
+  // Auth endpoints
+  app.post("/api/auth/signup", async (req, res) => {
+    try {
+      const { email, password, username } = signupSchema.parse(req.body);
+
+      // Check if user exists
+      const existingUser = await storage.getUserByEmail(email);
+      if (existingUser) {
+        return res.status(400).json({ error: "Email already registered" });
+      }
+
+      // Hash password and create user
+      const hashedPassword = await bcrypt.hash(password, 10);
+      const user = await storage.createUser({
+        email,
+        username,
+        password: hashedPassword,
+      });
+
+      // Create session
+      const token = jwt.sign({ userId: user.id }, JWT_SECRET);
+      res.cookie("token", token, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "lax",
+        maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+      });
+
+      // Return user without password
+      const { password: _, ...userWithoutPassword } = user;
+      res.json({ user: userWithoutPassword });
+    } catch (error) {
+      res.status(400).json({ error: (error as Error).message });
+    }
+  });
+
+  app.post("/api/auth/login", async (req, res) => {
+    try {
+      const { email, password } = loginSchema.parse(req.body);
+
+      // Get user
+      const user = await storage.getUserByEmail(email);
+      if (!user) {
+        return res.status(401).json({ error: "Invalid credentials" });
+      }
+
+      // Verify password
+      const isValid = await bcrypt.compare(password, user.password);
+      if (!isValid) {
+        return res.status(401).json({ error: "Invalid credentials" });
+      }
+
+      // Create session
+      const token = jwt.sign({ userId: user.id }, JWT_SECRET);
+      res.cookie("token", token, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "lax",
+        maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+      });
+
+      // Return user without password
+      const { password: _, ...userWithoutPassword } = user;
+      res.json({ user: userWithoutPassword });
+    } catch (error) {
+      res.status(400).json({ error: (error as Error).message });
+    }
+  });
+
+  app.post("/api/auth/logout", (req, res) => {
+    res.clearCookie("token");
+    res.json({ success: true });
+  });
+
+  app.get("/api/auth/session", (req: AuthRequest, res) => {
+    if (!req.userId) {
+      return res.status(401).json({ error: "Not authenticated" });
+    }
+
+    res.json({ user: req.userId });
   });
 
   // Analyze resume endpoint

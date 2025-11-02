@@ -1,5 +1,4 @@
-// Mock authentication utilities
-// TODO: Replace with actual NextAuth.js + Firebase Auth integration
+import { z } from "zod";
 
 export interface User {
   id: string;
@@ -7,43 +6,61 @@ export interface User {
   username: string;
 }
 
-export function getMockUser(): User | null {
-  // For MVP, return a mock authenticated user
-  if (typeof window === 'undefined') return null;
-  
-  const stored = localStorage.getItem('mockUser');
-  if (stored) {
-    return JSON.parse(stored);
+export const loginSchema = z.object({
+  email: z.string().email("Invalid email address"),
+  password: z.string().min(8, "Password must be at least 8 characters"),
+});
+
+export const signupSchema = loginSchema.extend({
+  username: z.string().min(3, "Username must be at least 3 characters"),
+});
+
+export type LoginInput = z.infer<typeof loginSchema>;
+export type SignupInput = z.infer<typeof signupSchema>;
+
+export async function getCurrentUser(): Promise<User | null> {
+  try {
+    const response = await fetch("/api/auth/session", {
+      credentials: "include",
+    });
+    
+    if (!response.ok) return null;
+    
+    const data = await response.json();
+    return data.user;
+  } catch (error) {
+    console.error("Failed to get current user:", error);
+    return null;
   }
-  
-  // Auto-login for MVP demo
-  const mockUser: User = {
-    id: 'mock-user-id',
-    email: 'demo@jobmatchai.com',
-    username: 'demo_user',
-  };
-  
-  localStorage.setItem('mockUser', JSON.stringify(mockUser));
-  return mockUser;
 }
 
-export function login(email: string, password: string): User {
-  // Mock login - TODO: Implement actual authentication
-  const user: User = {
-    id: 'mock-user-' + Date.now(),
-    email,
-    username: email.split('@')[0],
-  };
-  
-  localStorage.setItem('mockUser', JSON.stringify(user));
-  return user;
+export async function login(input: LoginInput): Promise<User> {
+  const response = await fetch('/api/auth/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+    credentials: 'include'
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.message || 'Login failed');
+  }
+
+  const data = await response.json();
+  return data.user;
 }
 
 export function logout(): void {
-  localStorage.removeItem('mockUser');
-  window.location.href = '/';
+  fetch('/api/auth/logout', {
+    method: 'POST',
+    credentials: 'include'
+  }).finally(() => {
+    window.location.href = '/';
+  });
 }
 
 export function isAuthenticated(): boolean {
-  return getMockUser() !== null;
+  const token = localStorage.getItem('auth_token');
+  return token !== null;
 }

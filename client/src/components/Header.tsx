@@ -1,58 +1,44 @@
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
-import { FileText, LogOut, User } from "lucide-react";
+import { useAuth } from "@/context/AuthContext";
 
-interface HeaderProps {
-  isAuthenticated?: boolean;
-  showAuthButtons?: boolean;
-}
+export default function Header() {
+  const { user, logout } = useAuth();
 
-export default function Header({ isAuthenticated = false, showAuthButtons = true }: HeaderProps) {
   return (
-    <header className="sticky top-0 z-50 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-      <div className="container mx-auto flex h-16 items-center justify-between px-6">
-        <Link href="/">
-          <div className="flex items-center gap-2 hover-elevate active-elevate-2 rounded-md px-3 py-2 -ml-3 cursor-pointer" data-testid="link-home">
-            <FileText className="h-6 w-6 text-primary" />
-            <span className="font-display text-xl font-bold">JobMatchAI</span>
-          </div>
+    <header className="flex items-center justify-between px-6 py-4 bg-white shadow-sm sticky top-0 z-50">
+      <Link href="/" className="text-2xl font-bold text-primary hover:opacity-80 transition">
+        JobMatchAI
+      </Link>
+
+      <nav className="flex items-center gap-4">
+        <Link href="/analyze" className="text-gray-700 hover:text-primary">
+          Analyze
         </Link>
 
-        <nav className="flex items-center gap-4">
-          {showAuthButtons && !isAuthenticated && (
-            <>
-              <Link href="/login">
-                <Button variant="ghost" data-testid="button-login">Sign In</Button>
-              </Link>
-              <Link href="/signup">
-                <Button variant="default" data-testid="button-signup">Get Started</Button>
-              </Link>
-            </>
-          )}
-          
-          {isAuthenticated && (
-            <>
-              <Link href="/dashboard">
-                <Button variant="ghost" data-testid="button-dashboard">Dashboard</Button>
-              </Link>
-              <Button variant="ghost" size="icon" data-testid="button-profile">
-                <User className="h-5 w-5" />
-              </Button>
-              <Button 
-                variant="ghost" 
-                size="icon" 
-                data-testid="button-logout"
-                onClick={() => {
-                  localStorage.removeItem("mockUser");
-                  window.location.href = "/";
-                }}
-              >
-                <LogOut className="h-5 w-5" />
-              </Button>
-            </>
-          )}
-        </nav>
-      </div>
+        {!user ? (
+          <>
+            <Link href="/login">
+              <Button variant="outline">Login</Button>
+            </Link>
+            <Link href="/signup">
+              <Button>Sign Up</Button>
+            </Link>
+          </>
+        ) : (
+          <>
+            <Link href="/result" className="text-gray-700 hover:text-primary">
+              Results
+            </Link>
+            <Button variant="outline" onClick={logout}>
+              Logout
+            </Button>
+            <span className="text-sm text-muted-foreground">
+              Hi, {user.username}
+            </span>
+          </>
+        )}
+      </nav>
     </header>
   );
 }
