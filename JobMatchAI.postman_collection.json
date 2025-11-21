@@ -1,0 +1,439 @@
+{
+  "info": {
+    "name": "JobMatchAI API",
+    "description": "Complete API collection for JobMatchAI - Resume analysis, GitHub integration, resources generation, and auto resume builder",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "version": "1.0.0"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:5000/api",
+      "type": "string"
+    },
+    {
+      "key": "userId",
+      "value": "test-user",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "1. Resume Analysis",
+      "item": [
+        {
+          "name": "Analyze Resume",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"resumeText\": \"John Doe\\nSoftware Engineer\\n\\nSKILLS\\nPython, JavaScript, React, Node.js, AWS, Docker\\n\\nEXPERIENCE\\nSenior Software Engineer at Tech Corp (2020-Present)\\n- Led development of microservices architecture\\n- Improved system performance by 40%\\n- Mentored team of 5 engineers\\n\\nSoftware Engineer at StartupXYZ (2018-2020)\\n- Built scalable web applications\\n- Implemented CI/CD pipelines\\n\\nEDUCATION\\nBS Computer Science, MIT (2018)\\nGPA: 3.8/4.0\",\n  \"userId\": \"{{userId}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/analyze",
+              "host": ["{{baseUrl}}"],
+              "path": ["analyze"]
+            },
+            "description": "Analyze a resume and get ATS score with suggestions"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Analysis by ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/analysis/:id",
+              "host": ["{{baseUrl}}"],
+              "path": ["analysis", ":id"],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "analysis_id_here"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get All Analyses",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/analyses?userId={{userId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["analyses"],
+              "query": [
+                {
+                  "key": "userId",
+                  "value": "{{userId}}"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Improve Resume",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"resumeText\": \"Software engineer with 5 years of experience building web applications\",\n  \"userId\": \"{{userId}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/improve",
+              "host": ["{{baseUrl}}"],
+              "path": ["improve"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Quota",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/quota?userId={{userId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["quota"],
+              "query": [
+                {
+                  "key": "userId",
+                  "value": "{{userId}}"
+                }
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "2. GitHub Integration",
+      "item": [
+        {
+          "name": "Fetch GitHub Repos",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"torvalds\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/github/repos",
+              "host": ["{{baseUrl}}"],
+              "path": ["github", "repos"]
+            },
+            "description": "Fetch all public repositories for a GitHub user"
+          },
+          "response": []
+        },
+        {
+          "name": "Analyze GitHub Projects",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"torvalds\",\n  \"jobDescription\": \"Senior Software Engineer\\n\\nWe are looking for an experienced software engineer with strong expertise in:\\n- C programming and systems programming\\n- Linux kernel development\\n- Git and version control systems\\n- Low-level system design\\n- Open source contribution\\n\\nResponsibilities:\\n- Develop and maintain critical system components\\n- Collaborate with global developer community\\n- Review and merge code contributions\\n- Ensure code quality and performance\\n\\nRequirements:\\n- 10+ years of experience in systems programming\\n- Deep understanding of operating systems\\n- Strong C programming skills\\n- Experience with Git internals\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/github/analyze",
+              "host": ["{{baseUrl}}"],
+              "path": ["github", "analyze"]
+            },
+            "description": "Analyze GitHub projects against a job description and get top 3 matches"
+          },
+          "response": []
+        },
+        {
+          "name": "Generate Project Descriptions",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"projects\": [\n    {\n      \"name\": \"linux\",\n      \"description\": \"Linux kernel source tree\",\n      \"techStack\": [\"C\", \"Assembly\", \"Shell\"],\n      \"matchScore\": 98,\n      \"relevanceReason\": \"Core Linux kernel development\",\n      \"stars\": 150000,\n      \"lastUpdated\": \"2024-01-15\"\n    }\n  ],\n  \"jobDescription\": \"Senior Systems Engineer position\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/github/project-descriptions",
+              "host": ["{{baseUrl}}"],
+              "path": ["github", "project-descriptions"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Extract GitHub Skills",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"torvalds\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/github/skills",
+              "host": ["{{baseUrl}}"],
+              "path": ["github", "skills"]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "3. Learning Resources",
+      "item": [
+        {
+          "name": "Generate Learning Resources",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"jobDescription\": \"Full Stack Developer\\n\\nRequired Skills:\\n- React and TypeScript\\n- Node.js and Express\\n- MongoDB or PostgreSQL\\n- AWS (EC2, S3, Lambda)\\n- Docker and Kubernetes\\n- CI/CD pipelines\\n- RESTful APIs and GraphQL\\n\\nNice to Have:\\n- Next.js\\n- Microservices architecture\\n- Redis caching\\n- Terraform\",\n  \"userSkills\": [\"JavaScript\", \"React\", \"Node.js\", \"MongoDB\"]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/resources/generate",
+              "host": ["{{baseUrl}}"],
+              "path": ["resources", "generate"]
+            },
+            "description": "Generate tailored learning resources based on job description"
+          },
+          "response": []
+        },
+        {
+          "name": "Generate Interview Questions",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"jobDescription\": \"Senior Backend Engineer\\n\\nRequired:\\n- Python and Django/Flask\\n- PostgreSQL and database optimization\\n- Microservices architecture\\n- AWS cloud services\\n- API design and development\\n- System design and scalability\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/resources/interview-questions",
+              "host": ["{{baseUrl}}"],
+              "path": ["resources", "interview-questions"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Analyze Skill Gap",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"jobDescription\": \"Data Scientist\\n\\nRequired:\\n- Python (NumPy, Pandas, Scikit-learn)\\n- Machine Learning algorithms\\n- TensorFlow or PyTorch\\n- SQL and data warehousing\\n- Data visualization (Tableau, Matplotlib)\\n- Statistics and probability\\n- A/B testing\",\n  \"userSkills\": [\"Python\", \"Pandas\", \"SQL\", \"Matplotlib\"]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/resources/skill-gap",
+              "host": ["{{baseUrl}}"],
+              "path": ["resources", "skill-gap"]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "4. Auto Resume Builder",
+      "item": [
+        {
+          "name": "Auto-Generate Complete Resume",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userProfile\": {\n    \"name\": \"Jane Smith\",\n    \"email\": \"jane.smith@email.com\",\n    \"phone\": \"+1 (555) 987-6543\",\n    \"location\": \"Seattle, WA\",\n    \"title\": \"Full Stack Engineer\",\n    \"skills\": [\"React\", \"Node.js\", \"TypeScript\", \"MongoDB\", \"AWS\", \"Docker\", \"GraphQL\"],\n    \"experience\": [\n      {\n        \"company\": \"TechCorp Inc.\",\n        \"position\": \"Senior Full Stack Engineer\",\n        \"duration\": \"2021 - Present\",\n        \"responsibilities\": [\n          \"Led development of microservices architecture serving 1M+ users\",\n          \"Reduced API response time by 60% through optimization\",\n          \"Mentored team of 5 junior engineers\",\n          \"Implemented CI/CD pipelines reducing deployment time by 75%\"\n        ]\n      },\n      {\n        \"company\": \"StartupXYZ\",\n        \"position\": \"Full Stack Developer\",\n        \"duration\": \"2019 - 2021\",\n        \"responsibilities\": [\n          \"Built scalable e-commerce platform handling 10k daily transactions\",\n          \"Implemented real-time features using WebSockets\",\n          \"Developed RESTful APIs with Node.js and Express\"\n        ]\n      }\n    ],\n    \"education\": [\n      {\n        \"degree\": \"BS Computer Science\",\n        \"institution\": \"University of Washington\",\n        \"year\": \"2019\",\n        \"gpa\": \"3.9\"\n      }\n    ],\n    \"certifications\": [\"AWS Solutions Architect\", \"MongoDB Developer\"]\n  },\n  \"jobDescription\": \"Senior Full Stack Engineer\\n\\nWe're seeking an experienced full stack engineer to join our growing team.\\n\\nRequired Skills:\\n- React and TypeScript\\n- Node.js and Express\\n- MongoDB or PostgreSQL\\n- AWS (EC2, S3, Lambda)\\n- Docker and Kubernetes\\n- RESTful APIs and GraphQL\\n- Microservices architecture\\n\\nResponsibilities:\\n- Design and develop scalable web applications\\n- Lead technical decisions and architecture\\n- Mentor junior developers\\n- Collaborate with product and design teams\\n\\nRequirements:\\n- 5+ years of full stack development experience\\n- Strong problem-solving skills\\n- Experience with cloud platforms\\n- Excellent communication skills\",\n  \"githubProjects\": [\n    {\n      \"name\": \"realtime-chat-app\",\n      \"description\": \"Scalable real-time chat application with microservices\",\n      \"techStack\": [\"React\", \"Node.js\", \"Socket.io\", \"Redis\", \"Docker\"],\n      \"bullets\": [\n        \"Built real-time chat platform supporting 50k+ concurrent users\",\n        \"Implemented microservices architecture with Docker and Kubernetes\",\n        \"Achieved 99.9% uptime with load balancing and auto-scaling\",\n        \"Integrated Redis for session management and caching\"\n      ]\n    },\n    {\n      \"name\": \"e-commerce-platform\",\n      \"description\": \"Full-featured e-commerce platform with payment integration\",\n      \"techStack\": [\"React\", \"Node.js\", \"MongoDB\", \"Stripe\", \"AWS\"],\n      \"bullets\": [\n        \"Developed full-stack e-commerce platform processing $1M+ in transactions\",\n        \"Integrated Stripe payment gateway with fraud detection\",\n        \"Implemented inventory management with real-time updates\",\n        \"Deployed on AWS with auto-scaling EC2 instances\"\n      ]\n    },\n    {\n      \"name\": \"task-automation-tool\",\n      \"description\": \"Developer productivity tool for automating repetitive tasks\",\n      \"techStack\": [\"TypeScript\", \"Node.js\", \"GraphQL\", \"PostgreSQL\"],\n      \"bullets\": [\n        \"Created CLI tool reducing developer workflow time by 40%\",\n        \"Implemented GraphQL API for flexible data querying\",\n        \"Built extensible plugin system for custom integrations\",\n        \"Achieved 5k+ downloads on npm registry\"\n      ]\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/resume/auto-generate",
+              "host": ["{{baseUrl}}"],
+              "path": ["resume", "auto-generate"]
+            },
+            "description": "Generate a complete ATS-optimized resume with GitHub projects"
+          },
+          "response": []
+        },
+        {
+          "name": "Optimize Existing Resume",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"existingResume\": \"John Doe\\nSoftware Developer\\n\\nI worked at various companies building web applications. I know JavaScript, React, and some backend stuff. I also did some projects on GitHub.\",\n  \"jobDescription\": \"Senior Full Stack Engineer position requiring React, Node.js, and AWS experience\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/resume/optimize",
+              "host": ["{{baseUrl}}"],
+              "path": ["resume", "optimize"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Generate Professional Summary",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userProfile\": {\n    \"title\": \"Full Stack Engineer\",\n    \"skills\": [\"React\", \"Node.js\", \"TypeScript\", \"AWS\"],\n    \"experience\": [\n      {\n        \"company\": \"Tech Corp\",\n        \"position\": \"Senior Engineer\",\n        \"duration\": \"3 years\",\n        \"responsibilities\": []\n      }\n    ],\n    \"education\": []\n  },\n  \"jobDescription\": \"Senior Full Stack position at innovative startup\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/resume/summary",
+              "host": ["{{baseUrl}}"],
+              "path": ["resume", "summary"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Parse Resume Text",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"resumeText\": \"JOHN DOE\\njohn.doe@email.com | (555) 123-4567 | LinkedIn: linkedin.com/in/johndoe\\n\\nPROFESSIONAL SUMMARY\\nExperienced software engineer with 5+ years building scalable web applications\\n\\nSKILLS\\nLanguages: Python, JavaScript, TypeScript\\nFrameworks: React, Node.js, Django\\nDatabases: PostgreSQL, MongoDB, Redis\\nCloud: AWS (EC2, S3, Lambda)\\nTools: Docker, Kubernetes, Git\\n\\nEXPERIENCE\\n\\nSenior Software Engineer | Tech Corp | 2021 - Present\\n- Led development of microservices architecture\\n- Improved system performance by 40%\\n- Mentored team of 3 junior engineers\\n\\nSoftware Engineer | StartupXYZ | 2019 - 2021\\n- Built RESTful APIs with Node.js\\n- Implemented CI/CD pipelines\\n- Developed React components\\n\\nEDUCATION\\n\\nBachelor of Science in Computer Science\\nUniversity of California | 2019\\nGPA: 3.8/4.0\\n\\nCERTIFICATIONS\\n- AWS Solutions Architect Associate\\n- MongoDB Developer\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/resume/parse",
+              "host": ["{{baseUrl}}"],
+              "path": ["resume", "parse"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Generate Cover Letter",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userProfile\": {\n    \"name\": \"Jane Smith\",\n    \"title\": \"Full Stack Engineer\",\n    \"skills\": [\"React\", \"Node.js\", \"AWS\"]\n  },\n  \"jobDescription\": \"Senior Full Stack Engineer at TechStartup Inc. - building next-generation SaaS platform\",\n  \"companyName\": \"TechStartup Inc.\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/resume/cover-letter",
+              "host": ["{{baseUrl}}"],
+              "path": ["resume", "cover-letter"]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "5. Job Description",
+      "item": [
+        {
+          "name": "Parse Job Description",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"jobDescription\": \"DevOps Engineer\\n\\nRequired Skills:\\n- Kubernetes and Docker containerization\\n- CI/CD pipelines (Jenkins, GitLab CI, GitHub Actions)\\n- Cloud platforms (AWS or Azure)\\n- Infrastructure as Code (Terraform, Ansible)\\n- Python or Bash scripting\\n- Monitoring and logging (Prometheus, Grafana, ELK)\\n\\nNice to Have:\\n- Service mesh (Istio, Linkerd)\\n- GitOps workflows (ArgoCD, Flux)\\n- Security best practices\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/jd/parse",
+              "host": ["{{baseUrl}}"],
+              "path": ["jd", "parse"]
+            }
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}

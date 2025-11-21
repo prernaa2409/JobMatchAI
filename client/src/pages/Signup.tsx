@@ -37,7 +37,7 @@ export default function Signup() {
 
   return (
     <section className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/5 via-background to-background">
-      <div className="w-full max-w-md bg-white shadow-lg rounded-2xl p-8">
+      <div className="w-full max-w-md bg-card shadow-lg rounded-2xl p-8 border border-border">
         <h1 className="text-3xl font-bold text-center mb-2 text-primary">
           Create Account 🚀
         </h1>
@@ -47,7 +47,7 @@ export default function Signup() {
 
         <form onSubmit={handleSignup} className="space-y-5">
           <div>
-            <label className="block text-sm font-medium mb-1">Email</label>
+            <label className="block text-sm font-medium mb-1 text-foreground">Email</label>
             <Input
               type="email"
               required
@@ -58,7 +58,7 @@ export default function Signup() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium mb-1">Password</label>
+            <label className="block text-sm font-medium mb-1 text-foreground">Password</label>
             <Input
               type="password"
               required
@@ -69,7 +69,7 @@ export default function Signup() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium mb-1">Confirm Password</label>
+            <label className="block text-sm font-medium mb-1 text-foreground">Confirm Password</label>
             <Input
               type="password"
               required
@@ -79,7 +79,7 @@ export default function Signup() {
             />
           </div>
 
-          {error && <p className="text-red-500 text-sm">{error}</p>}
+          {error && <p className="text-destructive text-sm">{error}</p>}
 
           <Button
             type="submit"

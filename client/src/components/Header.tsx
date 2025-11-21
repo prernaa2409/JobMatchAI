@@ -6,13 +6,13 @@ export default function Header() {
   const { user, logout } = useAuth();
 
   return (
-    <header className="flex items-center justify-between px-6 py-4 bg-white shadow-sm sticky top-0 z-50">
+    <header className="flex items-center justify-between px-6 py-4 bg-card border-b border-border sticky top-0 z-50">
       <Link href="/" className="text-2xl font-bold text-primary hover:opacity-80 transition">
         JobMatchAI
       </Link>
 
       <nav className="flex items-center gap-4">
-        <Link href="/analyze" className="text-gray-700 hover:text-primary">
+        <Link href="/analyze" className="text-muted-foreground hover:text-primary transition-colors">
           Analyze
         </Link>
 
@@ -27,8 +27,8 @@ export default function Header() {
           </>
         ) : (
           <>
-            <Link href="/result" className="text-gray-700 hover:text-primary">
-              Results
+            <Link href="/dashboard" className="text-muted-foreground hover:text-primary transition-colors">
+              Dashboard
             </Link>
             <Button variant="outline" onClick={logout}>
               Logout

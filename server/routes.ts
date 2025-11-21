@@ -1,314 +1,598 @@
-import type { Express, Request } from "express";
-import { createServer, type Server } from "http";
-import { storage } from "./storage";
-import { analyzeResume, improveResume } from "./gemini";
-import { insertAnalysisSchema, insertRevisionSchema } from "@shared/schema";
-import bcrypt from "bcryptjs";
-import jwt from "jsonwebtoken";
-import { z } from "zod";
+import { Router } from 'express';
+import type { Request, Response } from 'express';
+import { analyzeResume, improveResume } from './gemini';
+import { storage } from './storage';
+import { createGitHubService } from './github';
+import { resourcesService } from './resources';
+import { resumeBuilderService } from './resume-builder';
 
-const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key";
+const router = Router();
 
-const loginSchema = z.object({
-  email: z.string().email(),
-  password: z.string().min(8),
+// ==================== EXISTING ROUTES ====================
+
+/**
+ * POST /api/analyze
+ * Analyze resume with Gemini AI
+ */
+router.post('/analyze', async (req: Request, res: Response) => {
+  try {
+    const { resumeText, userId = 'mock-user' } = req.body;
+
+    if (!resumeText) {
+      return res.status(400).json({ error: 'Resume text is required' });
+    }
+
+    // Analyze with Gemini
+    const analysis = await analyzeResume(resumeText);
+
+    // Store in database
+    const analysisRecord = await storage.createAnalysis({
+      userId,
+      resumeText,
+      ...analysis,
+    });
+
+    res.json({
+      id: analysisRecord.id,
+      ...analysis,
+      createdAt: analysisRecord.createdAt,
+    });
+  } catch (error: any) {
+    console.error('Analysis error:', error);
+    res.status(500).json({ error: error.message || 'Failed to analyze resume' });
+  }
 });
 
-const signupSchema = loginSchema.extend({
-  username: z.string().min(3),
+/**
+ * GET /api/analysis/:id
+ * Get specific analysis by ID
+ */
+router.get('/analysis/:id', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const analysis = await storage.getAnalysis(id);
+
+    if (!analysis) {
+      return res.status(404).json({ error: 'Analysis not found' });
+    }
+
+    res.json(analysis);
+  } catch (error: any) {
+    console.error('Get analysis error:', error);
+    res.status(500).json({ error: error.message });
+  }
 });
 
-interface AuthRequest extends Request {
-  userId?: string;
-}
+/**
+ * GET /api/analyses
+ * Get all analyses for a user
+ */
+router.get('/analyses', async (req: Request, res: Response) => {
+  try {
+    const { userId = 'mock-user' } = req.query;
+    const analyses = await storage.getUserAnalyses(userId as string);
 
-export async function registerRoutes(app: Express): Promise<Server> {
-  // Authentication middleware
-  app.use((req: AuthRequest, res, next) => {
-    const token = req.cookies.token;
-    if (!token) return next();
+    res.json({
+      analyses,
+      total: analyses.length,
+    });
+  } catch (error: any) {
+    console.error('Get analyses error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
 
-    try {
-      const decoded = jwt.verify(token, JWT_SECRET) as { userId: string };
-      req.userId = decoded.userId;
-      next();
-    } catch (error) {
-      res.clearCookie("token");
-      next();
-    }
-  });
+/**
+ * POST /api/improve
+ * Generate improved resume (quota enforced)
+ */
+router.post('/improve', async (req: Request, res: Response) => {
+  try {
+    const { resumeText, analysisId, userId = 'mock-user' } = req.body;
 
-  // Auth endpoints
-  app.post("/api/auth/signup", async (req, res) => {
-    try {
-      const { email, password, username } = signupSchema.parse(req.body);
-
-      // Check if user exists
-      const existingUser = await storage.getUserByEmail(email);
-      if (existingUser) {
-        return res.status(400).json({ error: "Email already registered" });
-      }
-
-      // Hash password and create user
-      const hashedPassword = await bcrypt.hash(password, 10);
-      const user = await storage.createUser({
-        email,
-        username,
-        password: hashedPassword,
-      });
-
-      // Create session
-      const token = jwt.sign({ userId: user.id }, JWT_SECRET);
-      res.cookie("token", token, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "lax",
-        maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-      });
-
-      // Return user without password
-      const { password: _, ...userWithoutPassword } = user;
-      res.json({ user: userWithoutPassword });
-    } catch (error) {
-      res.status(400).json({ error: (error as Error).message });
-    }
-  });
-
-  app.post("/api/auth/login", async (req, res) => {
-    try {
-      const { email, password } = loginSchema.parse(req.body);
-
-      // Get user
-      const user = await storage.getUserByEmail(email);
-      if (!user) {
-        return res.status(401).json({ error: "Invalid credentials" });
-      }
-
-      // Verify password
-      const isValid = await bcrypt.compare(password, user.password);
-      if (!isValid) {
-        return res.status(401).json({ error: "Invalid credentials" });
-      }
-
-      // Create session
-      const token = jwt.sign({ userId: user.id }, JWT_SECRET);
-      res.cookie("token", token, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "lax",
-        maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-      });
-
-      // Return user without password
-      const { password: _, ...userWithoutPassword } = user;
-      res.json({ user: userWithoutPassword });
-    } catch (error) {
-      res.status(400).json({ error: (error as Error).message });
-    }
-  });
-
-  app.post("/api/auth/logout", (req, res) => {
-    res.clearCookie("token");
-    res.json({ success: true });
-  });
-
-  app.get("/api/auth/session", (req: AuthRequest, res) => {
-    if (!req.userId) {
-      return res.status(401).json({ error: "Not authenticated" });
+    if (!resumeText) {
+      return res.status(400).json({ error: 'Resume text is required' });
     }
 
-    res.json({ user: req.userId });
-  });
-
-  // Analyze resume endpoint
-  app.post("/api/analyze", async (req, res) => {
-    try {
-      const userId = (req as any).userId;
-      const { resumeText } = req.body;
-
-      if (!resumeText || typeof resumeText !== "string") {
-        return res.status(400).json({ error: "Resume text is required" });
-      }
-
-      // Call Gemini AI for analysis
-      const analysisResult = await analyzeResume(resumeText);
-
-      // Store analysis in database
-      const analysis = await storage.createAnalysis({
-        userId,
-        resumeText,
-        overallScore: analysisResult.overallScore,
-        contentScore: analysisResult.contentScore,
-        keywordScore: analysisResult.keywordScore,
-        formatScore: analysisResult.formatScore,
-        experienceScore: analysisResult.experienceScore,
-        suggestions: analysisResult.suggestions,
-        keywords: analysisResult.keywords,
-      });
-
-      res.json({
-        id: analysis.id,
-        ...analysisResult,
-      });
-    } catch (error) {
-      console.error("Analysis error:", error);
-      res.status(500).json({ error: "Failed to analyze resume" });
-    }
-  });
-
-  // Get analysis by ID
-  app.get("/api/analysis/:id", async (req, res) => {
-    try {
-      const { id } = req.params;
-      const analysis = await storage.getAnalysis(id);
-
-      if (!analysis) {
-        return res.status(404).json({ error: "Analysis not found" });
-      }
-
-      res.json(analysis);
-    } catch (error) {
-      console.error("Get analysis error:", error);
-      res.status(500).json({ error: "Failed to fetch analysis" });
-    }
-  });
-
-  // Get user's analyses
-  app.get("/api/analyses", async (req, res) => {
-    try {
-      const userId = (req as any).userId;
-      const analyses = await storage.getUserAnalyses(userId);
-      res.json(analyses);
-    } catch (error) {
-      console.error("Get analyses error:", error);
-      res.status(500).json({ error: "Failed to fetch analyses" });
-    }
-  });
-
-  // Improve resume endpoint
-  app.post("/api/improve", async (req, res) => {
-    try {
-      const userId = (req as any).userId;
-      const { analysisId } = req.body;
-
-      if (!analysisId) {
-        return res.status(400).json({ error: "Analysis ID is required" });
-      }
-
-      // Check if already improved
-      const existingRevision = await storage.getRevisionByAnalysis(analysisId);
-      if (existingRevision) {
-        const user = await storage.getOrCreateMockUser(userId);
-        return res.json({
-          id: existingRevision.id,
-          improvedText: existingRevision.improvedText,
-          quotaUsed: user.improvementsUsed,
-          quotaLimit: user.improvementsLimit,
-        });
-      }
-
-      // Get or create mock user to check quota
-      const user = await storage.getOrCreateMockUser(userId);
-
-      if (user.improvementsUsed >= user.improvementsLimit) {
-        return res.status(403).json({ 
-          error: "Improvement quota exceeded",
-          used: user.improvementsUsed,
-          limit: user.improvementsLimit,
-        });
-      }
-
-      // Get analysis
-      const analysis = await storage.getAnalysis(analysisId);
-      if (!analysis) {
-        return res.status(404).json({ error: "Analysis not found" });
-      }
-
-      // Call Gemini AI for improvement
-      const improvedText = await improveResume(
-        analysis.resumeText,
-        analysis.overallScore,
-        (analysis.keywords as any).missing || []
-      );
-
-      // Store revision
-      const revision = await storage.createRevision({
-        analysisId,
-        userId,
-        improvedText,
-      });
-
-      // Update user quota
-      const newUsedCount = user.improvementsUsed + 1;
-      await storage.updateUserImprovements(userId, newUsedCount);
-
-      res.json({
-        id: revision.id,
-        improvedText: revision.improvedText,
-        quotaUsed: newUsedCount,
-        quotaLimit: user.improvementsLimit,
-      });
-    } catch (error) {
-      console.error("Improvement error:", error);
-      res.status(500).json({ error: "Failed to improve resume" });
-    }
-  });
-
-  // Get user quota
-  app.get("/api/quota", async (req, res) => {
-    try {
-      const userId = (req as any).userId;
-      const user = await storage.getOrCreateMockUser(userId);
-
-      res.json({
+    // Check quota
+    const user = await storage.getOrCreateMockUser(userId);
+    
+    if (user.improvementsUsed >= user.improvementsLimit) {
+      return res.status(403).json({
+        error: 'Improvement quota exceeded',
         used: user.improvementsUsed,
-        total: user.improvementsLimit,
-        remaining: user.improvementsLimit - user.improvementsUsed,
+        limit: user.improvementsLimit,
       });
-    } catch (error) {
-      console.error("Quota error:", error);
-      res.status(500).json({ error: "Failed to fetch quota" });
     }
-  });
 
-  // Admin endpoints
-  app.get("/api/admin/users", async (req, res) => {
-    try {
-      // TODO: Add admin authentication check
-      res.json([
-        {
-          id: "1",
-          email: "john.doe@example.com",
-          plan: "Free",
-          analyses: 12,
-          improvements: "2/3",
-          lastActive: "2 hours ago",
-        },
-      ]);
-    } catch (error) {
-      console.error("Admin users error:", error);
-      res.status(500).json({ error: "Failed to fetch users" });
+    // Generate improvement
+    const improvedText = await improveResume(resumeText);
+
+    // Save revision
+    const revision = await storage.createRevision({
+      analysisId: analysisId || 'standalone',
+      userId,
+      improvedText,
+    });
+
+    // Increment quota
+    await storage.incrementUserQuota(userId);
+
+    res.json({
+      id: revision.id,
+      improvedText,
+      quotaRemaining: user.improvementsLimit - user.improvementsUsed - 1,
+      createdAt: revision.createdAt,
+    });
+  } catch (error: any) {
+    console.error('Improvement error:', error);
+    res.status(500).json({ error: error.message || 'Failed to improve resume' });
+  }
+});
+
+/**
+ * GET /api/quota
+ * Get user's improvement quota status
+ */
+router.get('/quota', async (req: Request, res: Response) => {
+  try {
+    const { userId = 'mock-user' } = req.query;
+    const user = await storage.getOrCreateMockUser(userId as string);
+
+    res.json({
+      used: user.improvementsUsed,
+      limit: user.improvementsLimit,
+      remaining: user.improvementsLimit - user.improvementsUsed,
+    });
+  } catch (error: any) {
+    console.error('Quota error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ==================== GITHUB INTEGRATION ROUTES ====================
+
+/**
+ * POST /api/github/repos
+ * Fetch user's GitHub repositories
+ */
+router.post('/github/repos', async (req: Request, res: Response) => {
+  try {
+    const { username, accessToken } = req.body;
+
+    if (!username) {
+      return res.status(400).json({ error: 'Username is required' });
     }
-  });
 
-  app.get("/api/admin/logs", async (req, res) => {
-    try {
-      // TODO: Add admin authentication check
-      res.json([
-        {
-          id: "1",
-          user: "john.doe@example.com",
-          action: "Resume Analysis",
-          status: "Success",
-          timestamp: new Date().toISOString(),
-        },
-      ]);
-    } catch (error) {
-      console.error("Admin logs error:", error);
-      res.status(500).json({ error: "Failed to fetch logs" });
+    const githubService = createGitHubService(accessToken);
+    const repos = await githubService.getUserRepos(username);
+
+    res.json({
+      username,
+      totalRepos: repos.length,
+      repos: repos.slice(0, 20).map(repo => ({
+        id: repo.id,
+        name: repo.name,
+        description: repo.description,
+        language: repo.language,
+        stars: repo.stargazers_count,
+        url: repo.html_url,
+        topics: repo.topics,
+        updatedAt: repo.updated_at,
+      })),
+    });
+  } catch (error: any) {
+    console.error('GitHub repos fetch error:', error);
+    res.status(500).json({ error: error.message || 'Failed to fetch repositories' });
+  }
+});
+
+/**
+ * POST /api/github/analyze
+ * Analyze GitHub projects against job description
+ */
+router.post('/github/analyze', async (req: Request, res: Response) => {
+  try {
+    const { username, jobDescription, accessToken } = req.body;
+
+    if (!username || !jobDescription) {
+      return res.status(400).json({ 
+        error: 'Username and job description are required' 
+      });
     }
-  });
 
-  const httpServer = createServer(app);
-  return httpServer;
-}
+    const githubService = createGitHubService(accessToken);
+    const analyzedProjects = await githubService.analyzeProjectsForJob(
+      username,
+      jobDescription
+    );
+
+    res.json({
+      username,
+      matchedProjects: analyzedProjects,
+      totalAnalyzed: analyzedProjects.length,
+    });
+  } catch (error: any) {
+    console.error('GitHub analysis error:', error);
+    res.status(500).json({ error: error.message || 'Failed to analyze projects' });
+  }
+});
+
+/**
+ * POST /api/github/project-descriptions
+ * Generate enhanced project descriptions for resume
+ */
+router.post('/github/project-descriptions', async (req: Request, res: Response) => {
+  try {
+    const { projects, jobDescription } = req.body;
+
+    if (!projects || !Array.isArray(projects) || !jobDescription) {
+      return res.status(400).json({ 
+        error: 'Projects array and job description are required' 
+      });
+    }
+
+    const githubService = createGitHubService();
+    const descriptions = await githubService.generateProjectDescriptions(
+      projects,
+      jobDescription
+    );
+
+    res.json({ projectDescriptions: descriptions });
+  } catch (error: any) {
+    console.error('Project descriptions error:', error);
+    res.status(500).json({ error: error.message || 'Failed to generate project descriptions' });
+  }
+});
+
+/**
+ * POST /api/github/skills
+ * Extract skills from GitHub profile
+ */
+router.post('/github/skills', async (req: Request, res: Response) => {
+  try {
+    const { username, accessToken } = req.body;
+
+    if (!username) {
+      return res.status(400).json({ error: 'Username is required' });
+    }
+
+    const githubService = createGitHubService(accessToken);
+    const skills = await githubService.extractSkillsFromGitHub(username);
+
+    res.json(skills);
+  } catch (error: any) {
+    console.error('GitHub skills extraction error:', error);
+    res.status(500).json({ error: error.message || 'Failed to extract skills' });
+  }
+});
+
+// ==================== RESOURCES GENERATION ROUTES ====================
+
+/**
+ * POST /api/resources/generate
+ * Generate learning resources based on job description
+ */
+router.post('/resources/generate', async (req: Request, res: Response) => {
+  try {
+    const { jobDescription, userSkills } = req.body;
+
+    if (!jobDescription) {
+      return res.status(400).json({ error: 'Job description is required' });
+    }
+
+    const learningPlan = await resourcesService.generateResources(
+      jobDescription,
+      userSkills || []
+    );
+
+    res.json({
+      learningPlan,
+      generatedAt: new Date().toISOString(),
+    });
+  } catch (error: any) {
+    console.error('Resources generation error:', error);
+    res.status(500).json({ error: error.message || 'Failed to generate resources' });
+  }
+});
+
+/**
+ * POST /api/resources/interview-questions
+ * Generate interview questions based on job description
+ */
+router.post('/resources/interview-questions', async (req: Request, res: Response) => {
+  try {
+    const { jobDescription } = req.body;
+
+    if (!jobDescription) {
+      return res.status(400).json({ error: 'Job description is required' });
+    }
+
+    const questions = await resourcesService.generateInterviewQuestions(jobDescription);
+
+    res.json({
+      questions,
+      totalQuestions: 
+        questions.technical.length + 
+        questions.behavioral.length + 
+        questions.systemDesign.length,
+    });
+  } catch (error: any) {
+    console.error('Interview questions generation error:', error);
+    res.status(500).json({ error: error.message || 'Failed to generate interview questions' });
+  }
+});
+
+/**
+ * POST /api/resources/skill-gap
+ * Analyze skill gap between user and job requirements
+ */
+router.post('/resources/skill-gap', async (req: Request, res: Response) => {
+  try {
+    const { jobDescription, userSkills } = req.body;
+
+    if (!jobDescription || !userSkills) {
+      return res.status(400).json({ 
+        error: 'Job description and user skills are required' 
+      });
+    }
+
+    const gapAnalysis = await resourcesService.analyzeSkillGap(
+      jobDescription,
+      userSkills
+    );
+
+    res.json(gapAnalysis);
+  } catch (error: any) {
+    console.error('Skill gap analysis error:', error);
+    res.status(500).json({ error: error.message || 'Failed to analyze skill gap' });
+  }
+});
+
+// ==================== AUTO RESUME BUILDER ROUTES ====================
+
+/**
+ * POST /api/resume/auto-generate
+ * Auto-generate complete resume with GitHub projects
+ */
+router.post('/resume/auto-generate', async (req: Request, res: Response) => {
+  try {
+    const { userProfile, jobDescription, githubProjects } = req.body;
+
+    if (!userProfile || !jobDescription) {
+      return res.status(400).json({ 
+        error: 'User profile and job description are required' 
+      });
+    }
+
+    const generatedResume = await resumeBuilderService.generateResume(
+      userProfile,
+      jobDescription,
+      githubProjects
+    );
+
+    res.json({
+      resume: generatedResume,
+      generatedAt: new Date().toISOString(),
+    });
+  } catch (error: any) {
+    console.error('Auto resume generation error:', error);
+    res.status(500).json({ error: error.message || 'Failed to generate resume' });
+  }
+});
+
+/**
+ * POST /api/resume/optimize
+ * Optimize existing resume for specific job
+ */
+router.post('/resume/optimize', async (req: Request, res: Response) => {
+  try {
+    const { existingResume, jobDescription } = req.body;
+
+    if (!existingResume || !jobDescription) {
+      return res.status(400).json({ 
+        error: 'Existing resume and job description are required' 
+      });
+    }
+
+    const optimized = await resumeBuilderService.optimizeResume(
+      existingResume,
+      jobDescription
+    );
+
+    res.json({
+      optimization: optimized,
+      optimizedAt: new Date().toISOString(),
+    });
+  } catch (error: any) {
+    console.error('Resume optimization error:', error);
+    res.status(500).json({ error: error.message || 'Failed to optimize resume' });
+  }
+});
+
+/**
+ * POST /api/resume/summary
+ * Generate professional summary
+ */
+router.post('/resume/summary', async (req: Request, res: Response) => {
+  try {
+    const { userProfile, jobDescription } = req.body;
+
+    if (!userProfile || !jobDescription) {
+      return res.status(400).json({ 
+        error: 'User profile and job description are required' 
+      });
+    }
+
+    const summary = await resumeBuilderService.generateSummary(
+      userProfile,
+      jobDescription
+    );
+
+    res.json({ summary });
+  } catch (error: any) {
+    console.error('Summary generation error:', error);
+    res.status(500).json({ error: error.message || 'Failed to generate summary' });
+  }
+});
+
+/**
+ * POST /api/resume/parse
+ * Parse uploaded resume text
+ */
+router.post('/resume/parse', async (req: Request, res: Response) => {
+  try {
+    const { resumeText } = req.body;
+
+    if (!resumeText) {
+      return res.status(400).json({ error: 'Resume text is required' });
+    }
+
+    const parsedData = await resumeBuilderService.parseResumeText(resumeText);
+
+    res.json({ parsedProfile: parsedData });
+  } catch (error: any) {
+    console.error('Resume parsing error:', error);
+    res.status(500).json({ error: error.message || 'Failed to parse resume' });
+  }
+});
+
+/**
+ * POST /api/resume/cover-letter
+ * Generate cover letter
+ */
+router.post('/resume/cover-letter', async (req: Request, res: Response) => {
+  try {
+    const { userProfile, jobDescription, companyName } = req.body;
+
+    if (!userProfile || !jobDescription || !companyName) {
+      return res.status(400).json({ 
+        error: 'User profile, job description, and company name are required' 
+      });
+    }
+
+    const coverLetter = await resumeBuilderService.generateCoverLetter(
+      userProfile,
+      jobDescription,
+      companyName
+    );
+
+    res.json({ 
+      coverLetter,
+      generatedAt: new Date().toISOString(),
+    });
+  } catch (error: any) {
+    console.error('Cover letter generation error:', error);
+    res.status(500).json({ error: error.message || 'Failed to generate cover letter' });
+  }
+});
+
+/**
+ * POST /api/resume/formats
+ * Generate resume in different formats
+ */
+router.post('/resume/formats', async (req: Request, res: Response) => {
+  try {
+    const { baseResume, format } = req.body;
+
+    if (!baseResume || !format) {
+      return res.status(400).json({ 
+        error: 'Base resume and format are required' 
+      });
+    }
+
+    if (!['ats', 'creative', 'executive'].includes(format)) {
+      return res.status(400).json({ 
+        error: 'Format must be one of: ats, creative, executive' 
+      });
+    }
+
+    const formattedResume = await resumeBuilderService.generateMultipleFormats(
+      baseResume,
+      format
+    );
+
+    res.json({ formattedResume, format });
+  } catch (error: any) {
+    console.error('Resume formatting error:', error);
+    res.status(500).json({ error: error.message || 'Failed to format resume' });
+  }
+});
+
+// ==================== JOB DESCRIPTION PARSING ====================
+
+/**
+ * POST /api/jd/parse
+ * Parse and extract information from job description
+ */
+router.post('/jd/parse', async (req: Request, res: Response) => {
+  try {
+    const { jobDescription } = req.body;
+
+    if (!jobDescription) {
+      return res.status(400).json({ error: 'Job description is required' });
+    }
+
+    const gapAnalysis = await resourcesService.analyzeSkillGap(
+      jobDescription,
+      []
+    );
+
+    res.json({
+      requiredSkills: gapAnalysis.missingSkills,
+      parsedAt: new Date().toISOString(),
+    });
+  } catch (error: any) {
+    console.error('JD parsing error:', error);
+    res.status(500).json({ error: error.message || 'Failed to parse job description' });
+  }
+});
+
+// ==================== ADMIN ROUTES (MOCK) ====================
+
+/**
+ * GET /api/admin/users
+ * Get all users (mock data)
+ */
+router.get('/admin/users', async (req: Request, res: Response) => {
+  try {
+    const users = await storage.getAllUsers();
+    res.json({ users, total: users.length });
+  } catch (error: any) {
+    console.error('Admin users error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /api/admin/logs
+ * Get audit logs (mock data)
+ */
+router.get('/admin/logs', async (req: Request, res: Response) => {
+  try {
+    // Mock audit logs
+    const logs = [
+      {
+        id: '1',
+        userId: 'mock-user',
+        action: 'analyze_resume',
+        timestamp: new Date().toISOString(),
+        metadata: { resumeLength: 1500 },
+      },
+      {
+        id: '2',
+        userId: 'mock-user',
+        action: 'improve_resume',
+        timestamp: new Date().toISOString(),
+        metadata: { quotaUsed: 1 },
+      },
+    ];
+    
+    res.json({ logs, total: logs.length });
+  } catch (error: any) {
+    console.error('Admin logs error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+export default router;
